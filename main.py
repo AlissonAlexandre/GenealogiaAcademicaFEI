@@ -3,6 +3,8 @@ import urllib.parse
 import time
 import re
 from pesquisador import Pesquisador
+from bs4 import BeautifulSoup
+
 
 def handle_route_block_script(route, request):
     if request.resource_type == "script":
@@ -16,9 +18,9 @@ def handle_route_block_nothing(route, request):
 
 def checaDataParam(elementos):
     pattern = re.compile(r".*nivelCurso=D.*")
-    for elemento in elementos:
-        if pattern.match(elemento.get_attribute('data-param')):
-            return elemento
+    
+    if pattern.match(elementos.get_attribute('data-param')):
+        return elementos
     return None
 
 with sync_playwright() as p:
@@ -60,8 +62,39 @@ with sync_playwright() as p:
         file.write(page.content())
     context.route("**/*", handle_route_block_nothing)
 
-    elementosAcademicos = page.locator(".ajaxCAPES").all()
-    objetoParamDoutorado = checaDataParam(elementosAcademicos).locator("..").inner_html()
+    
+    elementosAcademicos = page.locator(f'.layout-cell-pad-5')
+
+    index = 0
+    for i in range(elementosAcademicos.count()):
+        if elementosAcademicos.nth(i).locator('span.ajaxCAPES').count() > 0:
+            elemento = checaDataParam(elementosAcademicos.nth(i).locator('span.ajaxCAPES'))
+            if(elemento != None):
+                index = i
+                break
+    
+    #class clear (orientador,area,subarea)            
+    objetoParamDoutorado = elementosAcademicos.nth(index)
+
+    #criar parse aqui para extrair area, orientador, etc
+    lista = objetoParamDoutorado.text_content().replace("\t",'').split("\n")
+    instituicao = lista[0].split('.')[1]
+
+    #id lattes apenas 1 orientador por enquanto
+    
+    orientadorIdLattes = objetoParamDoutorado.locator('a.icone-lattes').get_attribute('href')
+    print("LINK LATTES ORIENTADOR: " + orientadorIdLattes)
+
+    print("LISTA COMPLETA SEM PARSER: ")
+    print(lista)
+    
+    
+
+    
+    
+    
+    
+
 
     #elemento = page.locator("[data-param]~='nivelCurso=D").locator("..")
 
