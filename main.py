@@ -46,16 +46,10 @@ def getParametrosDoutorado(page):
     except:
         orientadorId = ''
     return lista, orientadorId 
-    
-def buscaPesquisador(idLattes): 
-    with sync_playwright() as p:
-        # Configurar as opções do Chrome (caso deseje que a janela do navegador fique oculta)
-        browser = p.chromium.launch(headless=False, args=["--enable-automation"], timeout=5000)
-        context = browser.new_context()
-        # Inicializar o WebDriver
-        page = context.new_page()
-        
-        # Abrir uma página web
+
+
+def buscaInformacoesPesquisador(idLattes,context,page,grauMaximo,grauAtual,orientadores,orientado):
+    # Abrir uma página web
         patternLattesLink = re.compile(r"[a-zA-Z]+")
         if(patternLattesLink.match(idLattes)):
             page.goto(os.getenv("URL_LATTES_10") + idLattes)
@@ -114,17 +108,42 @@ def buscaPesquisador(idLattes):
         except:
             endereco = ''
         #id lattes apenas 1 orientador por enquanto
+        
         print("LINK LATTES ORIENTADOR: " + orientadorIdLattes)
 
 
         print("LISTA COMPLETA SEM PARSER: ")
         print(lista)
     
-        time.sleep(1000)
+        
         
         # Fechar o navegador
+        
+        orientados = []
+        if(grauAtual == grauMaximo):
+            return nome
+        orientados.append(orientado)  
+        nomeOrientador = buscaInformacoesPesquisador(orientadorIdLattes, context,page,grauMaximo, grauAtual+1,orientadores,nome)
+
+        orientadores.insert(0,nomeOrientador)
+        return nome
+
+def buscaPesquisador(idLattes): 
+    grauMaximo = 2
+    grauAtual = 0
+    orientadores = []
+    orientado = ""
+    with sync_playwright() as p:
+        # Configurar as opções do Chrome (caso deseje que a janela do navegador fique oculta)
+        browser = p.chromium.launch(headless=False, args=["--enable-automation"], timeout=5000)
+        context = browser.new_context()
+        # Inicializar o WebDriver
+        page = context.new_page()
+        
+        buscaInformacoesPesquisador(idLattes,context,page,grauMaximo,grauAtual,orientadores, orientado)
         browser.close()
-        return Pesquisador("","","",[],[],instituicao,"","","","","",[],"","")
+        
+        #return Pesquisador("","","",[],[],instituicao,"","","","","",[],"","")
 
 load_dotenv()
-buscaPesquisador("5337976093923686")
+buscaPesquisador("4231401119207209")
