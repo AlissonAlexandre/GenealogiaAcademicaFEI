@@ -48,7 +48,7 @@ def getParametrosDoutorado(page):
     return lista, orientadorId 
 
 
-def buscaInformacoesPesquisador(idLattes,context,page,grauMaximo,grauAtual,orientadores,orientado, pesquisadores):
+def buscaInformacoesPesquisador(idLattes,context,page,grauMaximo,grauAtual,grauMinimo,orientadores,orientado, pesquisadores):
     # Abrir uma página web
         patternLattesLink = re.compile(r"[a-zA-Z]+")
         if(patternLattesLink.match(idLattes)):
@@ -107,6 +107,11 @@ def buscaInformacoesPesquisador(idLattes,context,page,grauMaximo,grauAtual,orien
             endereco = instituicaoLotacaoList.split(".")[0].split(",")[0]
         except:
             endereco = ''
+        
+        try:
+            nacionalidade = page.get_by_text("País de Nacionalidade").locator("..").locator("..").locator('//following-sibling::div').last.inner_text()
+        except:
+            nacionalidade = ''
         #id lattes apenas 1 orientador por enquanto
         
         print("LINK LATTES ORIENTADOR: " + orientadorIdLattes)
@@ -118,7 +123,7 @@ def buscaInformacoesPesquisador(idLattes,context,page,grauMaximo,grauAtual,orien
         
         pesquisador = Pesquisador(
         nome=nome,  # Nome obtido pela função
-        nacionalidade='',  # Exemplo de nacionalidade
+        nacionalidade=nacionalidade,  # Exemplo de nacionalidade
         idLattes=idLattes,  # ID do Lattes obtido
         orientador='',  # Lista de orientadores
         orientados=[],  # Lista de orientados
@@ -149,6 +154,7 @@ def buscaInformacoesPesquisador(idLattes,context,page,grauMaximo,grauAtual,orien
 def buscaPesquisador(idLattes): 
     grauMaximo = 2
     grauAtual = 0
+    grauMinimo = -2
     orientadores = []
     orientado = ""
     pesquisadores = []
@@ -159,7 +165,7 @@ def buscaPesquisador(idLattes):
         # Inicializar o WebDriver
         page = context.new_page()
         
-        buscaInformacoesPesquisador(idLattes,context,page,grauMaximo,grauAtual,orientadores, orientado, pesquisadores)
+        buscaInformacoesPesquisador(idLattes,context,page,grauMaximo,grauAtual,grauMinimo,orientadores, orientado, pesquisadores)
         browser.close()
         
         #return Pesquisador("","","",[],[],instituicao,"","","","","",[],"","")
