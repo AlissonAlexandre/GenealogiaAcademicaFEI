@@ -48,6 +48,44 @@ def getParametrosDoutorado(page):
     return lista, orientadorId 
 
 
+def buscaOrientados(page):
+    try:
+        htmlDepoisDoCitaArtigo = page.locator(r'b>> text="Orientações e supervisões concluídas"').locator("..").locator("//following-sibling::*").locator(r'b>> text="Tese de doutorado"').locator('..').locator('..').first.inner_html()
+        htmlDepoisDoCitaArtigo = htmlDepoisDoCitaArtigo.replace("\n", "").replace("\t", "")
+        with open("htmlartigo.html", "w") as file:
+            file.write(htmlDepoisDoCitaArtigo)
+        #teste = page.locator('.title-wrapper')
+        soup = BeautifulSoup(htmlDepoisDoCitaArtigo, 'html.parser')
+        start_div = soup.find('b', string='Orientações e supervisões concluídas')
+        if not start_div:
+            return []
+
+        # Pegar o HTML após o ponto de início
+        htmlDepoisDoCitaArtigo = ''.join(str(tag) for tag in start_div.find_all_next())
+
+        soup = BeautifulSoup(htmlDepoisDoCitaArtigo, 'html.parser')
+
+        # Encontrar a div com a classe 'cita-artigos' que contém o texto 'Tese de doutorado'
+        start_div = soup.find('div', class_='cita-artigos', string='Tese de doutorado')
+
+        # Iterar pelos elementos seguintes até encontrar a próxima div com a classe 'cita-artigos'
+        spans = []
+        for sibling in start_div.find_next_siblings():
+            if sibling.name == 'div' and 'cita-artigos' in sibling.get('class', []):
+                break
+            spans.extend(sibling.find_all('span', class_='transform'))
+
+        # Extrair o href dentro da tag <a> com a classe icone-lattes dentro dos spans encontrados
+        hrefs = []
+        for span in spans:
+            a_tag = span.find('a', class_='icone-lattes')
+            if a_tag and a_tag.has_attr('href'):
+                tag = a_tag['href'].split('/')[-1]
+                hrefs.append(tag)
+        return hrefs
+    except:
+        return []
+
 def buscaInformacoesPesquisador(idLattes,context,page,grauMaximo,grauAtual,grauMinimo,orientadores,orientado, pesquisadores):
     # Abrir uma página web
         patternLattesLink = re.compile(r"[a-zA-Z]+")
@@ -145,10 +183,13 @@ def buscaInformacoesPesquisador(idLattes,context,page,grauMaximo,grauAtual,grauM
             pesquisadores.append(pesquisador)
             return pesquisador
         orientados.append(orientado)  
-        pesquisador.orientador = buscaInformacoesPesquisador(orientadorIdLattes, context,page,grauMaximo, grauAtual+1,orientadores,pesquisador, pesquisadores)
+        buscaOrientados(page)
+        time.sleep(10000)
+        pesquisador.orientador = buscaInformacoesPesquisador(orientadorIdLattes, context,page,grauMaximo, grauAtual+1,grauMinimo,orientadores,pesquisador, pesquisadores)
 
         orientadores.insert(0,pesquisador.orientador)
         pesquisadores.append(pesquisador)
+        
         return pesquisador
 
 def buscaPesquisador(idLattes): 
@@ -172,4 +213,5 @@ def buscaPesquisador(idLattes):
     print(pesquisadores)    
 
 load_dotenv()
-buscaPesquisador("4231401119207209")
+#buscaPesquisador("4231401119207209")
+buscaPesquisador("4727357182510680")
