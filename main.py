@@ -85,20 +85,31 @@ def buscaOrientados(page):
         return hrefs
     except:
         return []
+def pesquisadorVazio():
+    return Pesquisador(nome='', nacionalidade='')
 
-def buscaInformacoesPesquisador(idLattes,context,page,grauMaximo,grauAtual,grauMinimo,orientadores,orientado, pesquisadores):
-    # Abrir uma página web
+def buscaInformacoesPesquisador(idLattes,context,page,grauMaximoOrientador,grauAtualOrientador,grauMinimoOrientados,grauAtualOrientados,orientadores,orientado, pesquisadores, idLattesPesquisadores,executandoOrientacoes,limitadorOrientados):
+    
+        
+        if(idLattes not in idLattesPesquisadores):
+            idLattesPesquisadores.append(idLattes)
+        else:
+            for i in range(len(pesquisadores)):
+                if(pesquisadores[i].idLattes == idLattes):
+                    return pesquisadores[i]
+    
         patternLattesLink = re.compile(r"[a-zA-Z]+")
         if(patternLattesLink.match(idLattes)):
             page.goto(os.getenv("URL_LATTES_10") + idLattes)
         else:
             page.goto(os.getenv("URL_LATTES") + idLattes)
+        
         lid10 = urllib.parse.parse_qs(urllib.parse.urlparse(page.url).query)['id'][0]
         
         URL_PREVIEW = os.getenv("URL_PREVIEW_LATTES")        
         page.goto(URL_PREVIEW + lid10) 
 
-        timeout = 5000  # Timeout in milliseconds
+        timeout = 3000  # Timeout in milliseconds
         try:
             page.locator(".name").wait_for(timeout=timeout)
         except:
@@ -121,10 +132,15 @@ def buscaInformacoesPesquisador(idLattes,context,page,grauMaximo,grauAtual,grauM
 
         #criar parse aqui para extrair area, orientador, etc
         lista, orientadorIdLattes = getParametrosDoutorado(page)
-        print(lista)
+        
         areaDoutorado = lista.split('.')[0]
         instituicaoDoutorado = lista.split('.')[1].strip().split(',')[0]
-        tituloDoutorado = list(filter(None, lista.split('Título:')))[1].strip().split('\n')[0].split(',')[0]
+        try:
+            tituloDoutorado = list(filter(None, lista.split('Título:')))[1].strip().split('\n')[0].split(',')[0]
+        except:
+            tituloDoutorado = ''
+    
+        
         anoDoutorado = list(filter(None, re.split(r'Ano de obtenção: |\.|  , ', lista)))[0]
         try:
             palavrasChaveDoutorado = lista.split("Palavras-chave: ")[1].split('.')[0].split("; ")   
@@ -152,18 +168,14 @@ def buscaInformacoesPesquisador(idLattes,context,page,grauMaximo,grauAtual,grauM
             nacionalidade = ''
         #id lattes apenas 1 orientador por enquanto
         
-        print("LINK LATTES ORIENTADOR: " + orientadorIdLattes)
-
-
-        print("LISTA COMPLETA SEM PARSER: ")
-        print(lista)
+        
     
         
         pesquisador = Pesquisador(
         nome=nome,  # Nome obtido pela função
         nacionalidade=nacionalidade,  # Exemplo de nacionalidade
         idLattes=idLattes,  # ID do Lattes obtido
-        orientador='',  # Lista de orientadores
+        orientador= pesquisadorVazio(), 
         orientados=[],  # Lista de orientados
         instituicaoLotacao=endereco,  # Instituição de lotação obtida
         instituicaoDoutorado=instituicaoDoutorado,  # Instituição do doutorado
@@ -178,27 +190,58 @@ def buscaInformacoesPesquisador(idLattes,context,page,grauMaximo,grauAtual,grauM
         )
         
         
-        orientados = []
-        if(grauAtual == grauMaximo):
-            pesquisadores.append(pesquisador)
-            return pesquisador
-        orientados.append(orientado)  
-        buscaOrientados(page)
-        time.sleep(10000)
-        pesquisador.orientador = buscaInformacoesPesquisador(orientadorIdLattes, context,page,grauMaximo, grauAtual+1,grauMinimo,orientadores,pesquisador, pesquisadores)
+        
+        contador = 0
+        if(grauAtualOrientados != grauMinimoOrientados):
 
+            orientadosAux = buscaOrientados(page)
+            for orientadoIdLattes in orientadosAux:   
+                if(limitadorOrientados != 0):
+                    if(contador == limitadorOrientados):
+                        break
+                pesquisadorOrientado = buscaInformacoesPesquisador(orientadoIdLattes, context,page,grauMaximoOrientador, grauAtualOrientador,grauMinimoOrientados,grauAtualOrientados+1,orientadores,pesquisador, pesquisadores,idLattesPesquisadores,1,limitadorOrientados)
+                pesquisador.orientados.append(pesquisadorOrientado)
+                contador+=1
+
+        #time.sleep(10000)
+        if(executandoOrientacoes == 0):
+            if( grauAtualOrientador == grauMaximoOrientador) or  orientadorIdLattes == '':
+                pesquisadores.append(pesquisador)
+                return pesquisador
+            pesquisador.orientados.append(orientado)  
+            pesquisador.orientador = buscaInformacoesPesquisador(orientadorIdLattes, context,page,grauMaximoOrientador, grauAtualOrientador+1,grauMinimoOrientados,grauAtualOrientados,orientadores,pesquisador, pesquisadores,idLattesPesquisadores,0,limitadorOrientados)
+
+        elif (executandoOrientacoes == 1):
+            pesquisador.orientador = orientado
+        
         orientadores.insert(0,pesquisador.orientador)
         pesquisadores.append(pesquisador)
         
         return pesquisador
 
+
+
 def buscaPesquisador(idLattes): 
-    grauMaximo = 2
-    grauAtual = 0
-    grauMinimo = -2
+    #LIMITADOR PARA QUANTIDADE DE ORIENTADOS
+    #exemplo: se for 2, limita as listas de orientados em 2
+    limitadorOrientados = 2
+    #qtde graus orientador
+    grauMaximoOrientador = 2
+    #qtde graus orientados
+    grauMinimoOrientados = 2
+    grauAtualOrientador = 0
+    grauAtualOrientados = 0
+    
     orientadores = []
-    orientado = ""
+    orientado = pesquisadorVazio()
     pesquisadores = []
+    idLattesPesquisadores = []
+
+    #variavel para controlar recursao
+    #1 executa fluxo orientados -> ignora busca pelo orientador
+    #0 executa fluxo completo, incluindo orientados
+    executandoOrientacoes = 0
+
     with sync_playwright() as p:
         # Configurar as opções do Chrome (caso deseje que a janela do navegador fique oculta)
         browser = p.chromium.launch(headless=False, args=["--enable-automation"], timeout=5000)
@@ -206,12 +249,29 @@ def buscaPesquisador(idLattes):
         # Inicializar o WebDriver
         page = context.new_page()
         
-        buscaInformacoesPesquisador(idLattes,context,page,grauMaximo,grauAtual,grauMinimo,orientadores, orientado, pesquisadores)
+        buscaInformacoesPesquisador(idLattes,context,page,grauMaximoOrientador,grauAtualOrientador,grauMinimoOrientados,grauAtualOrientados,orientadores, orientado, pesquisadores,idLattesPesquisadores,executandoOrientacoes,limitadorOrientados)
         browser.close()
         
         #return Pesquisador("","","",[],[],instituicao,"","","","","",[],"","")
-    print(pesquisadores)    
+        with open('./teste.txt', 'w') as arquivo:
+            for i in range(len(pesquisadores)):
+                
+                pesquisadoresOrientadosNomes = []
+                for j in range(len(pesquisadores[i].orientados)):
+                    
+                    pesquisadoresOrientadosNomes.append(pesquisadores[i].orientados[j].nome)
+                    
+                    
+
+                arquivo.write(f"Pesquisador: {pesquisadores[i].nome}\nOrientador: {pesquisadores[i].orientador.nome}\nOrientados: {pesquisadoresOrientadosNomes}\n")
+                arquivo.write("--------------------------------------------------\n")
 
 load_dotenv()
 #buscaPesquisador("4231401119207209")
-buscaPesquisador("4727357182510680")
+inicio = time.time()
+buscaPesquisador("2240951178648368")
+fim = time.time()
+tempo_execucao = fim - inicio
+
+# Printa o tempo de execução
+print(f"Tempo de execução: {tempo_execucao} segundos")
