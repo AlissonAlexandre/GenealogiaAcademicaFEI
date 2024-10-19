@@ -48,7 +48,7 @@ def getParametrosDoutorado(page):
     return lista, orientadorId 
 
 
-def buscaInformacoesPesquisador(idLattes,context,page,grauMaximo,grauAtual,orientadores,orientado):
+def buscaInformacoesPesquisador(idLattes,context,page,grauMaximo,grauAtual,orientadores,orientado, pesquisadores):
     # Abrir uma página web
         patternLattesLink = re.compile(r"[a-zA-Z]+")
         if(patternLattesLink.match(idLattes)):
@@ -116,23 +116,42 @@ def buscaInformacoesPesquisador(idLattes,context,page,grauMaximo,grauAtual,orien
         print(lista)
     
         
+        pesquisador = Pesquisador(
+        nome=nome,  # Nome obtido pela função
+        nacionalidade='',  # Exemplo de nacionalidade
+        idLattes=idLattes,  # ID do Lattes obtido
+        orientador='',  # Lista de orientadores
+        orientados=[],  # Lista de orientados
+        instituicaoLotacao=endereco,  # Instituição de lotação obtida
+        instituicaoDoutorado=instituicaoDoutorado,  # Instituição do doutorado
+        grandeArea=grandeArea,  # Grande área de atuação
+        area=area,  # Área de atuação
+        subArea=subArea,  # Subárea de atuação
+        tituloDoutorado=tituloDoutorado,  # Título do doutorado
+        areaDoutorado=areaDoutorado,  # Área do doutorado
+        anoDoutorado=anoDoutorado,  # Ano do doutorado
+        palavrasChaveDoutorado=palavrasChaveDoutorado,  # Palavras-chave do doutorado
+        imagePath=urlPhoto  # URL da foto do pesquisador
+        )
         
-        # Fechar o navegador
         
         orientados = []
         if(grauAtual == grauMaximo):
-            return nome
+            pesquisadores.append(pesquisador)
+            return pesquisador
         orientados.append(orientado)  
-        nomeOrientador = buscaInformacoesPesquisador(orientadorIdLattes, context,page,grauMaximo, grauAtual+1,orientadores,nome)
+        pesquisador.orientador = buscaInformacoesPesquisador(orientadorIdLattes, context,page,grauMaximo, grauAtual+1,orientadores,pesquisador, pesquisadores)
 
-        orientadores.insert(0,nomeOrientador)
-        return nome
+        orientadores.insert(0,pesquisador.orientador)
+        pesquisadores.append(pesquisador)
+        return pesquisador
 
 def buscaPesquisador(idLattes): 
     grauMaximo = 2
     grauAtual = 0
     orientadores = []
     orientado = ""
+    pesquisadores = []
     with sync_playwright() as p:
         # Configurar as opções do Chrome (caso deseje que a janela do navegador fique oculta)
         browser = p.chromium.launch(headless=False, args=["--enable-automation"], timeout=5000)
@@ -140,10 +159,11 @@ def buscaPesquisador(idLattes):
         # Inicializar o WebDriver
         page = context.new_page()
         
-        buscaInformacoesPesquisador(idLattes,context,page,grauMaximo,grauAtual,orientadores, orientado)
+        buscaInformacoesPesquisador(idLattes,context,page,grauMaximo,grauAtual,orientadores, orientado, pesquisadores)
         browser.close()
         
         #return Pesquisador("","","",[],[],instituicao,"","","","","",[],"","")
+    print(pesquisadores)    
 
 load_dotenv()
 buscaPesquisador("4231401119207209")
