@@ -5,8 +5,9 @@ from dotenv import load_dotenv, dotenv_values
 import re
 import os
 from pesquisador import Pesquisador
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from bs4 import BeautifulSoup
-
+from database import insert_pesquisador, insert_relacoes
 
 def handle_route_block_script(route, request):
     if request.resource_type == "script":
@@ -47,7 +48,6 @@ def getParametrosDoutorado(page):
         orientadorId = ''
     return lista, orientadorId 
 
-
 def buscaOrientados(page):
     try:
         htmlDepoisDoCitaArtigo = page.locator(r'b>> text="Orientações e supervisões concluídas"').locator("..").locator("//following-sibling::*").locator(r'b>> text="Tese de doutorado"').locator('..').locator('..').first.inner_html()
@@ -85,11 +85,11 @@ def buscaOrientados(page):
         return hrefs
     except:
         return []
+    
 def pesquisadorVazio():
     return Pesquisador(nome='', nacionalidade='')
 
 def buscaInformacoesPesquisador(idLattes,context,page,grauMaximoOrientador,grauAtualOrientador,grauMinimoOrientados,grauAtualOrientados,orientadores,orientado, pesquisadores, idLattesPesquisadores,executandoOrientacoes,limitadorOrientados):
-    
         
         if(idLattes not in idLattesPesquisadores):
             idLattesPesquisadores.append(idLattes)
@@ -103,13 +103,12 @@ def buscaInformacoesPesquisador(idLattes,context,page,grauMaximoOrientador,grauA
             page.goto(os.getenv("URL_LATTES_10") + idLattes)
         else:
             page.goto(os.getenv("URL_LATTES") + idLattes)
-        
         lid10 = urllib.parse.parse_qs(urllib.parse.urlparse(page.url).query)['id'][0]
         
         URL_PREVIEW = os.getenv("URL_PREVIEW_LATTES")        
         page.goto(URL_PREVIEW + lid10) 
 
-        timeout = 3000  # Timeout in milliseconds
+        timeout = 5000  # Timeout in milliseconds
         try:
             page.locator(".name").wait_for(timeout=timeout)
         except:
@@ -127,21 +126,26 @@ def buscaInformacoesPesquisador(idLattes,context,page,grauMaximoOrientador,grauA
                 page = new_page
 
         #page.route("**buscatextual/js/v2*", handle_route)
-        print("Carregou pagina lattes do curriculo: ")
         context.route("**/*", handle_route_block_nothing)
 
         #criar parse aqui para extrair area, orientador, etc
         lista, orientadorIdLattes = getParametrosDoutorado(page)
-        
-        areaDoutorado = lista.split('.')[0]
-        instituicaoDoutorado = lista.split('.')[1].strip().split(',')[0]
+        try:
+            areaDoutorado = lista.split('.')[0]
+        except:
+            areaDoutorado = ''
+        try:
+            instituicaoDoutorado = lista.split('.')[1].strip().split(',')[0]
+        except:
+            instituicaoDoutorado = ''
         try:
             tituloDoutorado = list(filter(None, lista.split('Título:')))[1].strip().split('\n')[0].split(',')[0]
         except:
             tituloDoutorado = ''
-    
-        
-        anoDoutorado = list(filter(None, re.split(r'Ano de obtenção: |\.|  , ', lista)))[0]
+        try:
+            anoDoutorado = list(filter(None, re.split(r'Ano de obtenção: |\.|  , ', lista)))[0]
+        except:
+            anoDoutorado = ''
         try:
             palavrasChaveDoutorado = lista.split("Palavras-chave: ")[1].split('.')[0].split("; ")   
         except:
@@ -168,14 +172,11 @@ def buscaInformacoesPesquisador(idLattes,context,page,grauMaximoOrientador,grauA
             nacionalidade = ''
         #id lattes apenas 1 orientador por enquanto
         
-        
-    
-        
         pesquisador = Pesquisador(
         nome=nome,  # Nome obtido pela função
         nacionalidade=nacionalidade,  # Exemplo de nacionalidade
         idLattes=idLattes,  # ID do Lattes obtido
-        orientador= pesquisadorVazio(), 
+        orientador= pesquisadorVazio(),
         orientados=[],  # Lista de orientados
         instituicaoLotacao=endereco,  # Instituição de lotação obtida
         instituicaoDoutorado=instituicaoDoutorado,  # Instituição do doutorado
@@ -188,8 +189,6 @@ def buscaInformacoesPesquisador(idLattes,context,page,grauMaximoOrientador,grauA
         palavrasChaveDoutorado=palavrasChaveDoutorado,  # Palavras-chave do doutorado
         imagePath=urlPhoto  # URL da foto do pesquisador
         )
-        
-        
         
         contador = 0
         if(grauAtualOrientados != grauMinimoOrientados):
@@ -215,10 +214,12 @@ def buscaInformacoesPesquisador(idLattes,context,page,grauMaximoOrientador,grauA
             pesquisador.orientador = orientado
         
         orientadores.insert(0,pesquisador.orientador)
-        pesquisadores.append(pesquisador)
-        
-        return pesquisador
 
+def inserePesquisadores(pesquisadores):
+    for pesquisador in pesquisadores:
+        insert_pesquisador(pesquisador)
+    for pesquisador in pesquisadores:
+        insert_relacoes(pesquisador)
 
 
 def buscaPesquisador(idLattes): 
@@ -242,36 +243,60 @@ def buscaPesquisador(idLattes):
     #0 executa fluxo completo, incluindo orientados
     executandoOrientacoes = 0
 
+
+    timeout = 500
     with sync_playwright() as p:
         # Configurar as opções do Chrome (caso deseje que a janela do navegador fique oculta)
-        browser = p.chromium.launch(headless=False, args=["--enable-automation"], timeout=5000)
+        browser = p.chromium.launch(headless=False, args=["--enable-automation"], timeout=10000)
         context = browser.new_context()
         # Inicializar o WebDriver
         page = context.new_page()
-        
+        page.set_default_timeout(3000)
+
         buscaInformacoesPesquisador(idLattes,context,page,grauMaximoOrientador,grauAtualOrientador,grauMinimoOrientados,grauAtualOrientados,orientadores, orientado, pesquisadores,idLattesPesquisadores,executandoOrientacoes,limitadorOrientados)
         browser.close()
-        
+       
         #return Pesquisador("","","",[],[],instituicao,"","","","","",[],"","")
-        with open('./teste.txt', 'w') as arquivo:
-            for i in range(len(pesquisadores)):
-                
-                pesquisadoresOrientadosNomes = []
-                for j in range(len(pesquisadores[i].orientados)):
-                    
-                    pesquisadoresOrientadosNomes.append(pesquisadores[i].orientados[j].nome)
-                    
-                    
+    inserePesquisadores(pesquisadores)
 
-                arquivo.write(f"Pesquisador: {pesquisadores[i].nome}\nOrientador: {pesquisadores[i].orientador.nome}\nOrientados: {pesquisadoresOrientadosNomes}\n")
-                arquivo.write("--------------------------------------------------\n")
+def leArquivo():
+    pesquisadores = []
+    with open("cc.list", "r") as file:
+        for linha in file.readlines():
+            idLattes = linha.split(",")[0]
+            if idLattes != "" and idLattes is not None:
+                pesquisadores.append(idLattes.strip())
+    return pesquisadores
+        
+def processa_pesquisador(idLattes):
+    buscaPesquisador(idLattes)
 
-load_dotenv()
-#buscaPesquisador("4231401119207209")
-inicio = time.time()
-buscaPesquisador("2240951178648368")
-fim = time.time()
-tempo_execucao = fim - inicio
+def main():
+    load_dotenv()
+    inicio = time.time()
+    
+    pesquisadores = leArquivo()
+    
+    num_cores = os.cpu_count()
+    # Definir o número de threads no pool
+    num_threads = int(num_cores)/2  # Ajuste conforme necessário
+    
+    with ThreadPoolExecutor(max_workers=num_threads) as executor:
+        # Submeter as tarefas ao executor
+        futures = [executor.submit(processa_pesquisador, pesquisador) for pesquisador in pesquisadores]
+        
+        # Aguardar a conclusão de todas as tarefas
+        for future in as_completed(futures):
+            try:
+                future.result()
+            except Exception as e:
+                print(f"Erro ao processar pesquisador: {e}")
+    
+    fim = time.time()
+    tempo_execucao = fim - inicio
 
-# Printa o tempo de execução
-print(f"Tempo de execução: {tempo_execucao} segundos")
+    # Printa o tempo de execução
+    print(f"Tempo de execução: {tempo_execucao} segundos")
+
+if __name__ == "__main__":
+    main()

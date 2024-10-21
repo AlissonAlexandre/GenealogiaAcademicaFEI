@@ -4,3 +4,4 @@
 *.pyc
 *.htm
 *.html
+.env
