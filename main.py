@@ -214,6 +214,9 @@ def buscaInformacoesPesquisador(idLattes,context,page,grauMaximoOrientador,grauA
             pesquisador.orientador = orientado
         
         orientadores.insert(0,pesquisador.orientador)
+        pesquisadores.append(pesquisador)
+        
+        return pesquisador
 
 def inserePesquisadores(pesquisadores):
     for pesquisador in pesquisadores:
