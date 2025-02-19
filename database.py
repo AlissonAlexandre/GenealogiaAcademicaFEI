@@ -28,7 +28,8 @@ def create_pesquisador(tx, pesquisador):
         p.tituloDoutorado = $tituloDoutorado,
         p.areaDoutorado = $areaDoutorado,
         p.anoDoutorado = $anoDoutorado,
-        p.palavrasChaveDoutorado = $palavrasChaveDoutorado
+        p.palavrasChaveDoutorado = $palavrasChaveDoutorado,
+        p.setor = $setor
     """
     tx.run(query, 
            idLattes=pesquisador.idLattes.strip(),
@@ -43,7 +44,8 @@ def create_pesquisador(tx, pesquisador):
            tituloDoutorado=pesquisador.tituloDoutorado,
            areaDoutorado=pesquisador.areaDoutorado,
            anoDoutorado=pesquisador.anoDoutorado,
-           palavrasChaveDoutorado=pesquisador.palavrasChaveDoutorado)
+           palavrasChaveDoutorado=pesquisador.palavrasChaveDoutorado,
+           setor=pesquisador.setor)
     print("Inseriu pesquisador: ", pesquisador.nome)
 
 def insere_publicacoes(tx, pesquisador):
