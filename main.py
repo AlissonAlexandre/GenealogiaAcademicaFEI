@@ -2,10 +2,11 @@ from playwright.sync_api import sync_playwright
 import urllib.parse
 import time
 from dotenv import load_dotenv, dotenv_values 
+from line_profiler import profile
 import re
 import os
 from pesquisador import Pesquisador
-from concurrent.futures import ThreadPoolExecutor, as_completed
+#from concurrent.futures import ThreadPoolExecutor, as_completed
 from bs4 import BeautifulSoup
 from database import insert_pesquisador, insert_relacoes
 
@@ -18,7 +19,7 @@ def handle_route_block_script(route, request):
 def handle_route_block_nothing(route, request):
     route.continue_()
 
-
+@profile
 def checaDataParam(elementos):
     pattern = re.compile(r".*nivelCurso=D.*")
     
@@ -26,6 +27,7 @@ def checaDataParam(elementos):
         return elementos
     return None
 
+@profile
 def getParametrosDoutorado(page):
     elementosAcademicos = page.locator(f'.layout-cell-pad-5')
 
@@ -41,19 +43,21 @@ def getParametrosDoutorado(page):
     objetoParamDoutorado = elementosAcademicos.nth(index)
 
     #criar parse aqui para extrair area, orientador, etc
+    try:
+        anoDoutorado = objetoParamDoutorado.locator("..").locator("..").locator("..").locator(".layout-cell-12").locator(".layout-cell-pad-5").first.inner_text()
+    except:
+        anoDoutorado = ''
     lista = objetoParamDoutorado.text_content().replace("\t",'')
     try:
         orientadorId = objetoParamDoutorado.locator('a.icone-lattes').get_attribute('href').split('/')[-1]
     except:
         orientadorId = ''
-    return lista, orientadorId 
-
+    return lista, orientadorId, anoDoutorado  
+@profile
 def buscaOrientados(page):
     try:
         htmlDepoisDoCitaArtigo = page.locator(r'b>> text="Orientações e supervisões concluídas"').locator("..").locator("//following-sibling::*").locator(r'b>> text="Tese de doutorado"').locator('..').locator('..').first.inner_html()
         htmlDepoisDoCitaArtigo = htmlDepoisDoCitaArtigo.replace("\n", "").replace("\t", "")
-        with open("htmlartigo.html", "w") as file:
-            file.write(htmlDepoisDoCitaArtigo)
         #teste = page.locator('.title-wrapper')
         soup = BeautifulSoup(htmlDepoisDoCitaArtigo, 'html.parser')
         start_div = soup.find('b', string='Orientações e supervisões concluídas')
@@ -88,7 +92,7 @@ def buscaOrientados(page):
     
 def pesquisadorVazio():
     return Pesquisador(nome='', nacionalidade='')
-
+@profile
 def buscaInformacoesPesquisador(idLattes,context,page,grauMaximoOrientador,grauAtualOrientador,grauMinimoOrientados,grauAtualOrientados,orientadores,orientado, pesquisadores, idLattesPesquisadores,executandoOrientacoes,limitadorOrientados):
         
         if(idLattes not in idLattesPesquisadores):
@@ -129,7 +133,7 @@ def buscaInformacoesPesquisador(idLattes,context,page,grauMaximoOrientador,grauA
         context.route("**/*", handle_route_block_nothing)
 
         #criar parse aqui para extrair area, orientador, etc
-        lista, orientadorIdLattes = getParametrosDoutorado(page)
+        lista, orientadorIdLattes, anoDoutorado = getParametrosDoutorado(page)
         try:
             areaDoutorado = lista.split('.')[0]
         except:
@@ -142,10 +146,6 @@ def buscaInformacoesPesquisador(idLattes,context,page,grauMaximoOrientador,grauA
             tituloDoutorado = list(filter(None, lista.split('Título:')))[1].strip().split('\n')[0].split(',')[0]
         except:
             tituloDoutorado = ''
-        try:
-            anoDoutorado = list(filter(None, re.split(r'Ano de obtenção: |\.|  , ', lista)))[0]
-        except:
-            anoDoutorado = ''
         try:
             palavrasChaveDoutorado = lista.split("Palavras-chave: ")[1].split('.')[0].split("; ")   
         except:
@@ -189,7 +189,6 @@ def buscaInformacoesPesquisador(idLattes,context,page,grauMaximoOrientador,grauA
         palavrasChaveDoutorado=palavrasChaveDoutorado,  # Palavras-chave do doutorado
         imagePath=urlPhoto  # URL da foto do pesquisador
         )
-        
         contador = 0
         if(grauAtualOrientados != grauMinimoOrientados):
 
@@ -228,7 +227,7 @@ def inserePesquisadores(pesquisadores):
 def buscaPesquisador(idLattes): 
     #LIMITADOR PARA QUANTIDADE DE ORIENTADOS
     #exemplo: se for 2, limita as listas de orientados em 2
-    limitadorOrientados = 2
+    limitadorOrientados = 0
     #qtde graus orientador
     grauMaximoOrientador = 2
     #qtde graus orientados
@@ -254,7 +253,8 @@ def buscaPesquisador(idLattes):
         context = browser.new_context()
         # Inicializar o WebDriver
         page = context.new_page()
-        page.set_default_timeout(3000)
+        page.set_default_timeout(300)
+        page.set_default_navigation_timeout(15000)
 
         buscaInformacoesPesquisador(idLattes,context,page,grauMaximoOrientador,grauAtualOrientador,grauMinimoOrientados,grauAtualOrientados,orientadores, orientado, pesquisadores,idLattesPesquisadores,executandoOrientacoes,limitadorOrientados)
         browser.close()
@@ -283,18 +283,20 @@ def main():
     num_cores = os.cpu_count()
     # Definir o número de threads no pool
     num_threads = int(num_cores)/2  # Ajuste conforme necessário
-    
+    '''   
     with ThreadPoolExecutor(max_workers=num_threads) as executor:
-        # Submeter as tarefas ao executor
+        # Submeter as tar   efas ao executor
         futures = [executor.submit(processa_pesquisador, pesquisador) for pesquisador in pesquisadores]
         
-        # Aguardar a conclusão de todas as tarefas
+        # Aguardar a conclusão de todas as tarefas0
         for future in as_completed(futures):
             try:
                 future.result()
             except Exception as e:
                 print(f"Erro ao processar pesquisador: {e}")
-    
+    '''
+    for pesquisador in pesquisadores:
+        buscaPesquisador(pesquisador)
     fim = time.time()
     tempo_execucao = fim - inicio
 

@@ -62,7 +62,7 @@ def cria_relacoes(tx, pesquisador):
         MATCH (o:Pesquisador {idLattes: $orientado})
         MERGE (p)-[:ORIENTOU]->(o)
         """
-        tx.run(query, idLattes=pesquisador.idLattes.strip(), orientado=orientado)
+        tx.run(query, idLattes=pesquisador.idLattes.strip(), orientado=orientado.idLattes.strip())
     if pesquisador.orientador:
         query = """
         MATCH (p:Pesquisador {idLattes: $idLattes})

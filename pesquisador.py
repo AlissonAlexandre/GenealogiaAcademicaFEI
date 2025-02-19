@@ -17,4 +17,4 @@ class Pesquisador:
         self.tituloDoutorado = tituloDoutorado
         self.areaDoutorado = areaDoutorado
         self.anoDoutorado = anoDoutorado
-        self.palavrasChaveDoutorado = palavrasChaveDoutorado
+        self.palavrasChaveDoutorado = palavrasChaveDoutorado    

@@ -5,3 +5,6 @@
 *.htm
 *.html
 .env
+*.txt
+*.lprof
+*.list
