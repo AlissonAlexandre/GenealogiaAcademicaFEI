@@ -4,7 +4,7 @@
 *.pyc
 *.htm
 *.html
-.env
+/.env
 *.txt
 *.lprof
-*.list
+/*.list
