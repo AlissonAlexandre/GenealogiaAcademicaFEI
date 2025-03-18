@@ -243,9 +243,9 @@ def buscaPesquisador(idLattes, setor):
     pesquisadores = []
     idLattesPesquisadores = []
 
-    #variavel para controlar recursao
+    ''' NOTE: Variavel para controlar recursao
     #1 executa fluxo orientados -> ignora busca pelo orientador
-    #0 executa fluxo completo, incluindo orientados
+    #0 executa fluxo completo, incluindo orientados'''
     executandoOrientacoes = 0
 
     with sync_playwright() as p:
