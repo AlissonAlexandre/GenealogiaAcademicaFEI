@@ -10,7 +10,7 @@ from bs4 import BeautifulSoup
 from database import insert_pesquisador, insert_relacoes
 
 def handle_route_block_script(route, request):
-    # Necessário bloquear tags de script para capturar HTML original do lattes, após a execução dos scripts, todos os links de orientador/orientado são removidos
+    # NOTE: Necessário bloquear tags de script para capturar HTML original do lattes, já que se caso os scripts executem, todos os links de orientador/orientado são removidos
     if request.resource_type == "script":
         route.abort()
     else:
@@ -37,12 +37,10 @@ def getParametrosDoutorado(page):
                 index = i
                 break
     
-    #class clear (orientador,area,subarea)            
     objetoParamDoutorado = elementosAcademicos.nth(index)
 
-    #criar parse aqui para extrair area, orientador, etc
     try:
-        anoDoutorado = objetoParamDoutorado.locator("..").locator("..").locator("..").locator(".layout-cell-12").locator(".layout-cell-pad-5").first.inner_text()
+        anoDoutorado = objetoParamDoutorado.locator("..").locator("..").locator("..").locator(".layout-cell-12").locator(".layout-cell-pad-5", timeout=1000).first.inner_text()
     except:
         anoDoutorado = ''
     lista = objetoParamDoutorado.text_content().replace("\t",'')
@@ -54,7 +52,9 @@ def getParametrosDoutorado(page):
 
 def buscaOrientados(page):
     try:
-        htmlDepoisDoCitaArtigo = page.locator(r'b>> text="Orientações e supervisões concluídas"').locator("..").locator("//following-sibling::*").locator(r'b>> text="Tese de doutorado"').locator('..').locator('..').first.inner_html()
+
+        # NOTE: Não procurar pela div diretamente utilizando b>> text="...", a performance desse locator é pessima
+        htmlDepoisDoCitaArtigo = page.locator('div.inst_back:has-text("Orientações e supervisões concluídas")').locator("//following-sibling::*").get_by_text("Tese de doutorado").locator("..").locator("..").first.inner_html()
         htmlDepoisDoCitaArtigo = htmlDepoisDoCitaArtigo.replace("\n", "").replace("\t", "")
 
         soup = BeautifulSoup(htmlDepoisDoCitaArtigo, 'html.parser')
@@ -62,22 +62,22 @@ def buscaOrientados(page):
         if not start_div:
             return []
 
-        # Pegar o HTML após o ponto de início
+        # NOTE: Pegar o HTML após o ponto de início
         htmlDepoisDoCitaArtigo = ''.join(str(tag) for tag in start_div.find_all_next())
 
         soup = BeautifulSoup(htmlDepoisDoCitaArtigo, 'html.parser')
 
-        # Encontrar a div com a classe 'cita-artigos' que contém o texto 'Tese de doutorado'
+        # NOTE: Encontrar a div com a classe 'cita-artigos' que contém o texto 'Tese de doutorado'
         start_div = soup.find('div', class_='cita-artigos', string='Tese de doutorado')
 
-        # Iterar pelos elementos seguintes até encontrar a próxima div com a classe 'cita-artigos'
+        # NOTE: Iterar pelos elementos seguintes até encontrar a próxima div com a classe 'cita-artigos'
         spans = []
         for sibling in start_div.find_next_siblings():
             if sibling.name == 'div' and 'cita-artigos' in sibling.get('class', []):
                 break
             spans.extend(sibling.find_all('span', class_='transform'))
 
-        # Extrair o href dentro da tag <a> com a classe icone-lattes dentro dos spans encontrados
+        # NOTE: Extrair o href dentro da tag <a> com a classe icone-lattes dentro dos spans encontrados
         hrefs = []
         for span in spans:
             a_tag = span.find('a', class_='icone-lattes')
@@ -130,7 +130,7 @@ def buscaInformacoesPesquisador(idLattes, context, page, grauMaximoOrientador, g
 
     page.set_default_timeout(500)
 
-    # Parse Pagina principal Lattes
+    # NOTE: Parse Pagina principal Lattes
     lista, orientadorIdLattes, anoDoutorado = getParametrosDoutorado(page)
     try:
         areaDoutorado = lista.split('.')[0]
@@ -169,11 +169,10 @@ def buscaInformacoesPesquisador(idLattes, context, page, grauMaximoOrientador, g
     except:
         nacionalidade = ''
 
-    # correção para idLattes que iniciam com K, caso seja semente e seja orientado por uma semente, sem essa tratativa, duplicaria o pesquisador devido a dois IdLattes diferentes
+    # NOTE: Correção para idLattes que iniciam com K, caso seja semente e seja orientado por uma semente, sem essa tratativa, duplicaria o pesquisador devido a dois IdLattes diferentes
     if indicador_semente:
         idLattes = page.get_by_text("Endereço para acessar este CV:").first.inner_text().replace("Endereço para acessar este CV: ","").replace("http://lattes.cnpq.br/","")
     
-    page.set_default_timeout(40000)
 
     pesquisador = Pesquisador(
         nome=nome,  # Nome obtido pela função
@@ -196,13 +195,14 @@ def buscaInformacoesPesquisador(idLattes, context, page, grauMaximoOrientador, g
     )
     contador = 0
     
-    # Recursão para buscar vários pesquisadores
+    # NOTE: Recursão para buscar vários pesquisadores
     if grauAtualOrientados != grauMinimoOrientados:
         orientadosAux = buscaOrientados(page)
         for orientadoIdLattes in orientadosAux:   
             if limitadorOrientados != 0:
                 if contador == limitadorOrientados:
                     break
+            page.set_default_timeout(20000)
             pesquisadorOrientado = buscaInformacoesPesquisador(orientadoIdLattes, context, page, grauMaximoOrientador, grauAtualOrientador, grauMinimoOrientados, grauAtualOrientados+1, orientadores, pesquisador, pesquisadores, idLattesPesquisadores, 1, limitadorOrientados, setor, indicador_semente = False)
             pesquisador.orientados.append(pesquisadorOrientado)
             contador += 1
@@ -212,6 +212,7 @@ def buscaInformacoesPesquisador(idLattes, context, page, grauMaximoOrientador, g
             pesquisadores.append(pesquisador)
             return pesquisador
         pesquisador.orientados.append(orientado)  
+        page.set_default_timeout(20000)
         pesquisador.orientador = buscaInformacoesPesquisador(orientadorIdLattes, context, page, grauMaximoOrientador, grauAtualOrientador+1, grauMinimoOrientados, grauAtualOrientados, orientadores, pesquisador, pesquisadores, idLattesPesquisadores, 0, limitadorOrientados, setor, indicador_semente = False)
     elif executandoOrientacoes == 1:
         pesquisador.orientador = orientado
@@ -228,12 +229,11 @@ def inserePesquisadores(pesquisadores):
         insert_relacoes(pesquisador)
 
 def buscaPesquisador(idLattes, setor): 
-    #LIMITADOR PARA QUANTIDADE DE ORIENTADOS
-    #exemplo: se for 2, limita as listas de orientados em 2, caso 0, traz todos os orientados
+    '''NOTE: LIMITADOR PARA QUANTIDADE DE ORIENTADOS
+    Exemplo: se for 2, limita as listas de orientados em 2, caso 0, traz todos os orientados'''
+    
     limitadorOrientados = 0
-    #qtde graus orientador
     grauMaximoOrientador = 2
-    #qtde graus orientados
     grauMinimoOrientados = 2
     grauAtualOrientador = 0
     grauAtualOrientados = 0
@@ -243,19 +243,17 @@ def buscaPesquisador(idLattes, setor):
     pesquisadores = []
     idLattesPesquisadores = []
 
-    #variavel para controlar recursao
-    #1 executa fluxo orientados -> ignora busca pelo orientador
-    #0 executa fluxo completo, incluindo orientados
+    ''' NOTE: variavel para controlar recursao
+    1 executa fluxo orientados -> ignora busca pelo orientador
+    0 executa fluxo completo, incluindo orientados'''
     executandoOrientacoes = 0
 
     with sync_playwright() as p:
-        # Configurar as opções do Chrome (caso deseje que a janela do navegador fique oculta), habilitar headless para performance fora de debug
+        # NOTE: Configurar as opções do Chrome (caso deseje que a janela do navegador fique oculta), habilitar headless para performance fora de debug
         browser = p.chromium.launch(headless=False, args=["--enable-automation"])
         context = browser.new_context()
-        context.set_default_timeout(40000)
-        context.set_default_navigation_timeout(40000)
-
-        # Inicializar o WebDriver
+        context.set_default_timeout(20000)
+        context.set_default_navigation_timeout(20000)
         page = context.new_page()
 
         buscaInformacoesPesquisador(idLattes, context, page, grauMaximoOrientador, grauAtualOrientador, grauMinimoOrientados, grauAtualOrientados, orientadores, orientado, pesquisadores, idLattesPesquisadores, executandoOrientacoes, limitadorOrientados, setor, indicador_semente = True)
@@ -283,15 +281,11 @@ def main():
     inicio = time.time()
     
     pesquisadores = leArquivo() 
-    
-    # Definir o número de threads no pool de threads para processamento paralelo
-    num_threads = int(3)  # Ajuste conforme necessário -> padrão recomendado: 1/2 do número de núcleos -> int(os.cpu_count()) / 2
+    num_threads = int(1)  # NOTE: Ajuste conforme necessário -> padrão recomendado: 1/2 do número de núcleos -> int(os.cpu_count()) / 2
     
     with ThreadPoolExecutor(max_workers=num_threads) as executor:
-        # Submeter as tarefas ao executor
         futures = [executor.submit(processa_pesquisador, pesquisador[0], pesquisador[1]) for pesquisador in pesquisadores]
         
-        # Aguardar a conclusão de todas as tarefas
         for future in as_completed(futures):
             try:
                 future.result()

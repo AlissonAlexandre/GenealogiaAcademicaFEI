@@ -29,7 +29,7 @@ def create_pesquisador(tx, pesquisador):
         p.areaDoutorado = $areaDoutorado,
         p.anoDoutorado = $anoDoutorado,
         p.palavrasChaveDoutorado = $palavrasChaveDoutorado,
-        p.setor = $setor
+        p.setor = $setor,
         p.indicador_semente = $indicador_semente
     """
     tx.run(query, 
