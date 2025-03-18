@@ -91,7 +91,7 @@ def buscaOrientados(page):
 def pesquisadorVazio():
     return Pesquisador(nome='', nacionalidade='')
 
-def buscaInformacoesPesquisador(idLattes, context, page, grauMaximoOrientador, grauAtualOrientador, grauMinimoOrientados, grauAtualOrientados, orientadores, orientado, pesquisadores, idLattesPesquisadores, executandoOrientacoes, limitadorOrientados, setor):
+def buscaInformacoesPesquisador(idLattes, context, page, grauMaximoOrientador, grauAtualOrientador, grauMinimoOrientados, grauAtualOrientados, orientadores, orientado, pesquisadores, idLattesPesquisadores, executandoOrientacoes, limitadorOrientados, setor, indicador_semente):
         
     if idLattes not in idLattesPesquisadores:
         idLattesPesquisadores.append(idLattes)
@@ -137,7 +137,7 @@ def buscaInformacoesPesquisador(idLattes, context, page, grauMaximoOrientador, g
     except:
         areaDoutorado = ''
     try:
-        instituicaoDoutorado = lista.split('.')[1].strip().split(',')[0]
+        instituicaoDoutorado = lista.split('.')[1].strip().rsplit(",", 2)[0].strip()
     except:
         instituicaoDoutorado = ''
     try:
@@ -168,6 +168,10 @@ def buscaInformacoesPesquisador(idLattes, context, page, grauMaximoOrientador, g
         nacionalidade = page.get_by_text("País de Nacionalidade").locator("..").locator("..").locator('//following-sibling::div').last.inner_text()
     except:
         nacionalidade = ''
+
+    # correção para idLattes que iniciam com K, caso seja semente e seja orientado por uma semente, sem essa tratativa, duplicaria o pesquisador devido a dois IdLattes diferentes
+    if indicador_semente:
+        idLattes = page.get_by_text("Endereço para acessar este CV:").first.inner_text().replace("Endereço para acessar este CV: ","").replace("http://lattes.cnpq.br/","")
     
     page.set_default_timeout(40000)
 
@@ -187,7 +191,8 @@ def buscaInformacoesPesquisador(idLattes, context, page, grauMaximoOrientador, g
         anoDoutorado=anoDoutorado,  # Ano do doutorado
         palavrasChaveDoutorado=palavrasChaveDoutorado,  # Palavras-chave do doutorado
         imagePath=urlPhoto,  # URL da foto do pesquisador
-        setor=setor
+        setor=setor,
+        indicador_semente=indicador_semente
     )
     contador = 0
     
@@ -198,7 +203,7 @@ def buscaInformacoesPesquisador(idLattes, context, page, grauMaximoOrientador, g
             if limitadorOrientados != 0:
                 if contador == limitadorOrientados:
                     break
-            pesquisadorOrientado = buscaInformacoesPesquisador(orientadoIdLattes, context, page, grauMaximoOrientador, grauAtualOrientador, grauMinimoOrientados, grauAtualOrientados+1, orientadores, pesquisador, pesquisadores, idLattesPesquisadores, 1, limitadorOrientados, setor)
+            pesquisadorOrientado = buscaInformacoesPesquisador(orientadoIdLattes, context, page, grauMaximoOrientador, grauAtualOrientador, grauMinimoOrientados, grauAtualOrientados+1, orientadores, pesquisador, pesquisadores, idLattesPesquisadores, 1, limitadorOrientados, setor, indicador_semente = False)
             pesquisador.orientados.append(pesquisadorOrientado)
             contador += 1
 
@@ -207,7 +212,7 @@ def buscaInformacoesPesquisador(idLattes, context, page, grauMaximoOrientador, g
             pesquisadores.append(pesquisador)
             return pesquisador
         pesquisador.orientados.append(orientado)  
-        pesquisador.orientador = buscaInformacoesPesquisador(orientadorIdLattes, context, page, grauMaximoOrientador, grauAtualOrientador+1, grauMinimoOrientados, grauAtualOrientados, orientadores, pesquisador, pesquisadores, idLattesPesquisadores, 0, limitadorOrientados, setor)
+        pesquisador.orientador = buscaInformacoesPesquisador(orientadorIdLattes, context, page, grauMaximoOrientador, grauAtualOrientador+1, grauMinimoOrientados, grauAtualOrientados, orientadores, pesquisador, pesquisadores, idLattesPesquisadores, 0, limitadorOrientados, setor, indicador_semente = False)
     elif executandoOrientacoes == 1:
         pesquisador.orientador = orientado
     
@@ -253,7 +258,7 @@ def buscaPesquisador(idLattes, setor):
         # Inicializar o WebDriver
         page = context.new_page()
 
-        buscaInformacoesPesquisador(idLattes, context, page, grauMaximoOrientador, grauAtualOrientador, grauMinimoOrientados, grauAtualOrientados, orientadores, orientado, pesquisadores, idLattesPesquisadores, executandoOrientacoes, limitadorOrientados, setor)
+        buscaInformacoesPesquisador(idLattes, context, page, grauMaximoOrientador, grauAtualOrientador, grauMinimoOrientados, grauAtualOrientados, orientadores, orientado, pesquisadores, idLattesPesquisadores, executandoOrientacoes, limitadorOrientados, setor, indicador_semente = True)
         browser.close()
        
     inserePesquisadores(pesquisadores)
@@ -267,8 +272,8 @@ def leArquivo():
             for linha in file.readlines():
                 idLattes = linha.split(",")[0]
                 if idLattes != "" and idLattes is not None:
-                    pesquisadores.append(idLattes.strip())
-    return pesquisadores, file_name
+                    pesquisadores.append((idLattes.strip(), file_name))
+    return pesquisadores
         
 def processa_pesquisador(idLattes, setor):
     buscaPesquisador(idLattes, setor)
@@ -277,15 +282,14 @@ def main():
     load_dotenv()
     inicio = time.time()
     
-    pesquisadores, setor = leArquivo()
+    pesquisadores = leArquivo() 
     
     # Definir o número de threads no pool de threads para processamento paralelo
-    num_threads = int(3)  # Ajuste conforme necessário -> padrão recomendado: 1/2 do número de núcleos -> int(os.cpu_count())/ 2
-    
+    num_threads = int(3)  # Ajuste conforme necessário -> padrão recomendado: 1/2 do número de núcleos -> int(os.cpu_count()) / 2
     
     with ThreadPoolExecutor(max_workers=num_threads) as executor:
         # Submeter as tarefas ao executor
-        futures = [executor.submit(processa_pesquisador, pesquisador, setor) for pesquisador in pesquisadores]
+        futures = [executor.submit(processa_pesquisador, pesquisador[0], pesquisador[1]) for pesquisador in pesquisadores]
         
         # Aguardar a conclusão de todas as tarefas
         for future in as_completed(futures):
@@ -293,8 +297,6 @@ def main():
                 future.result()
             except Exception as e:
                 print(f"Erro ao processar pesquisador: {e}")
-    for pesquisador in pesquisadores:
-        buscaPesquisador(pesquisador, setor)
 
     fim = time.time()
     tempo_execucao = fim - inicio
