@@ -8,3 +8,5 @@
 *.txt
 *.lprof
 /*.list
+*.log
+Exemplo/*.list

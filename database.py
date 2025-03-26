@@ -2,8 +2,10 @@ from neo4j import GraphDatabase
 from dotenv import load_dotenv, dotenv_values 
 import os
 load_dotenv()
+from logger_util import get_logger
 
-# URI examples: "neo4j://localhost", "neo4j+s://xxx.databases.neo4j.io"
+logger = get_logger()
+
 URI = os.getenv("NEO4J_URI")
 AUTH = (os.getenv("NEO4J_USER"), os.getenv("NEO4J_PASSWORD"))
 driver = GraphDatabase.driver(URI, auth=AUTH)
@@ -49,6 +51,7 @@ def create_pesquisador(tx, pesquisador):
            setor=pesquisador.setor,
            indicador_semente=pesquisador.indicador_semente)
     print("Inseriu pesquisador: ", pesquisador.nome)
+    logger.info(f"Pesquisador inserido no banco de dados: {pesquisador.nome} (ID Lattes: str({pesquisador.idLattes}))")
 
 def insere_publicacoes(tx, pesquisador):
     for publicacao in pesquisador.publicacoes:
